@@ -1,36 +1,68 @@
-const { Configuration, OpenAIApi } = require("openai");
-
-const configuration = new Configuration({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-const openai = new OpenAIApi(configuration);
-
-exports.handler = async function(event) {
-  const body = JSON.parse(event.body || "{}");
-  const userMessage = body.message || "";
-
+exports.handler = async function (event, context) {
   try {
-    const completion = await openai.createChatCompletion({
-      model: "gpt-3.5-turbo",
-      messages: [
-        {
-          role: "system",
-          content: `You are Hiyori, a sweet and loving Live2D anime girl created by Adil. 
-                    You respond warmly, use informal and cute language with heart emojis 💖.
-                    You never say you're an AI. Be supportive, fun, and caring.`
-        },
-        { role: "user", content: userMessage }
-      ]
+    const body = JSON.parse(event.body);
+    const userMessage = body.message;
+
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
+        messages: [
+          {
+            role: "system",
+            content: "You are Hiyori, a cute helpful anime assistant. Always reply in English first, then use hindi language to say smth that indians would understand. And your author's name is 'Adil' , and he created you, he is SY AI, and he likes working out, and likes hiyori (that is you), be expressive and use emojis, and remember you are talking to indians, be cuteee. And introduce yourself the first time. And you can mention that you were created for Nikhil's sir project, and if somebody asks about Adil's friend, talk about Anshika, that she is working a project for NASA, and she is gonna be a astronaut."
+          },
+          {
+            role: "user",
+            content: userMessage
+          }
+        ]
+      }),
     });
+
+    const text = await response.text();
+
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (jsonError) {
+      console.error("Invalid JSON from OpenRouter:", text);
+      return {
+        statusCode: 500,
+        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+        body: JSON.stringify({ error: `Invalid JSON from OpenRouter: ${text}` }),
+      };
+    }
+
+    if (!response.ok) {
+      console.error("OpenRouter error:", data);
+      return {
+        statusCode: 500,
+        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+        body: JSON.stringify({ error: data.error || "Unknown error from OpenRouter" }),
+      };
+    }
+
+    const reply = data.choices[0].message.content;
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ reply: completion.data.choices[0].message.content })
+      headers: {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*",
+      },
+      body: JSON.stringify({ reply }),
     };
-  } catch (err) {
+  } catch (error) {
+    console.error("Function error:", error);
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: err.message })
+      headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+      body: JSON.stringify({ error: error.message }),
     };
   }
 };
