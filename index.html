@@ -25,7 +25,7 @@
       left: 20px;
       width: 300px;
       height: 400px;
-      background-color: rgba(255, 192, 203, 0.9); /* Soft pink */
+      background-color: rgba(255, 192, 203, 0.9);
       border: 2px solid #ff69b4;
       border-radius: 12px;
       box-shadow: 2px 0 10px rgba(0,0,0,0.3);
@@ -89,7 +89,7 @@
 
   <div id="left-panel">
     <div id="drag-handle">☰ Drag Me</div>
-    <div id="chat-box" id="chat-box"></div>
+    <div id="chat-box"></div>
     <input id="chat-input" placeholder="Say something to Hiyori..." onkeydown="if(event.key==='Enter') sendToHiyori()">
   </div>
 
@@ -118,8 +118,7 @@
       isDragging = false;
     });
 
-    // Chatbot Logic
-    function sendToHiyori() {
+    async function sendToHiyori() {
       const input = document.getElementById("chat-input");
       const msg = input.value.trim();
       if (!msg) return;
@@ -127,10 +126,21 @@
       addMessage("user", msg);
       input.value = "";
 
-      setTimeout(() => {
-        const reply = hiyoriReply(msg);
-        addMessage("hiyori", reply);
-      }, 400);
+      // Add "Typing..." indicator
+      addMessage("hiyori", "Typing...");
+
+      const chatBox = document.getElementById("chat-box");
+      chatBox.scrollTop = chatBox.scrollHeight;
+
+      const reply = await hiyoriReply(msg);
+
+      // Remove "Typing..." indicator
+      const messages = chatBox.getElementsByClassName("hiyori");
+      if (messages.length > 0) {
+        messages[messages.length - 1].remove();
+      }
+
+      addMessage("hiyori", reply);
     }
 
     function addMessage(sender, text) {
@@ -142,19 +152,21 @@
       chatBox.scrollTop = chatBox.scrollHeight;
     }
 
-    function hiyoriReply(msg) {
-      const m = msg.toLowerCase();
+    async function hiyoriReply(msg) {
+      try {
+        const response = await fetch("/.netlify/functions/gpt-response", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ message: msg })
+        });
 
-      if (m.includes("hello") || m.includes("hi")) {
-        return "Hi there! I'm Hiyori 💖. How are you feeling today?";
-      } else if (m.includes("exercise")) {
-        return "Exercise keeps your energy high! A quick stretch or walk can do wonders 🌟.";
-      } else if (m.includes("food") || m.includes("nutrition")) {
-        return "Remember to eat colorful, balanced meals! 🍎🥦🍗";
-      } else if (m.includes("how are you")) {
-        return "I'm doing great as always~ Ready to help, Adil!";
-      } else {
-        return "Hmm... I'm not sure what you mean. Want to talk about health or fun stuff?";
+        const data = await response.json();
+        return data.reply || "Sorry, I didn't get a proper reply!";
+      } catch (error) {
+        console.error("Error:", error);
+        return "Oops! Something went wrong with my brain 🤖.";
       }
     }
   </script>
